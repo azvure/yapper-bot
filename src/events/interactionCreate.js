@@ -1,5 +1,4 @@
 const { GuessWhoRound } = require('../models/GuessWho');
-const { incrementStat } = require('../utils/statsHelper');
 const { EmbedBuilder } = require('discord.js');
 
 module.exports = {
@@ -51,7 +50,7 @@ module.exports = {
       });
       await round.save();
 
-      // Award stats only if there's a canonical correct answer and the guess was correct
+      // Award stats only if there's a canonical correct answer (shouldn't happen for Guess Who)
       if (correct === true) {
         await incrementStat(interaction.guild.id, interaction.user.id, interaction.user.username, 'reactionsGiven', 0);
       }
@@ -75,14 +74,11 @@ module.exports = {
 
       // Update vote count on the embed
       const totalVotes = round.votes.length;
-      const correctVotes = isVoteOnly ? 0 : round.votes.filter(v => v.correct).length;
 
       try {
         const msg = await interaction.channel.messages.fetch(round.discordMessageId);
         if (msg) {
-          const footer = isVoteOnly
-            ? `${totalVotes} guess${totalVotes !== 1 ? 'es' : ''} so far`
-            : `${totalVotes} guess${totalVotes !== 1 ? 'es' : ''} so far • ${correctVotes} correct`;
+          const footer = `${totalVotes} guess${totalVotes !== 1 ? 'es' : ''} so far`;
           const updatedEmbed = EmbedBuilder.from(msg.embeds[0])
             .setFooter({ text: footer });
           await msg.edit({ embeds: [updatedEmbed] });

@@ -28,7 +28,7 @@ async function postGuessWho(client) {
   ]);
 
   if (!unused || unused.length === 0) {
-    return channel.send('😔 No unused quotes left in the out-of-context vault! Add more to <#' + (config.OUT_OF_CONTEXT_CHANNEL || 'out-of-context') + '>.');
+    return channel.send('😔 No unused quotes left in the out-of-context-shit channel! Add more to <#' + (config.OUT_OF_CONTEXT_CHANNEL || 'out-of-context') + '>.');
   }
 
   const quote = unused[0];
@@ -51,12 +51,12 @@ async function postGuessWho(client) {
 
   const select = new StringSelectMenuBuilder()
     .setCustomId(`guesswho:PLACEHOLDER`) // replaced after round is saved
-    .setPlaceholder('Who said this? 🤔')
+    .setPlaceholder('Who said this?')
     .addOptions(options);
 
   // Build embed
   const embed = new EmbedBuilder()
-    .setTitle('🕵️ Guess Who Said This?')
+    .setTitle('Guess Who Said This?')
     .setColor(0x6c5ce7)
     .setTimestamp()
     .setFooter({ text: '0 guesses so far' });

@@ -45,15 +45,13 @@ async function runWeeklyAnnouncement(client, options = {}) {
   const nightOwl    = getTopMember(members, 'lateNightMessages');
   const reactionLord = getTopMember(members, 'reactionsGiven');
 
-  // Guess-who winner: most correct votes cast in rounds this week
+  // Guess-who winner: most votes cast in rounds this week
   const weekRounds = await GuessWhoRound.find({ guildId, week: queryWeekStart, closed: true });
   const guessScores = {};
   for (const round of weekRounds) {
     for (const vote of round.votes) {
-      if (vote.correct) {
-        if (!guessScores[vote.userId]) guessScores[vote.userId] = { username: vote.username, count: 0 };
-        guessScores[vote.userId].count++;
-      }
+      if (!guessScores[vote.userId]) guessScores[vote.userId] = { username: vote.username, count: 0 };
+      guessScores[vote.userId].count++;
     }
   }
   const guessWinner = Object.entries(guessScores).sort((a, b) => b[1].count - a[1].count)[0];
@@ -76,12 +74,12 @@ async function runWeeklyAnnouncement(client, options = {}) {
     .setTimestamp();
 
   const lines = [
-    mediaKing    && `📸 **${config.ROLES.MEDIA_KING}** → <@${mediaKing.userId}> *(${mediaKing.value} files)*`,
-    vcGoblin     && `🎙️ **${config.ROLES.VC_GOBLIN}** → <@${vcGoblin.userId}> *(${formatDuration(vcGoblin.value)})*`,
-    chatterbox   && `💬 **${config.ROLES.CHATTERBOX}** → <@${chatterbox.userId}> *(${chatterbox.value} messages)*`,
-    nightOwl     && `🦉 **${config.ROLES.NIGHT_OWL}** → <@${nightOwl.userId}> *(${nightOwl.value} late-night msgs)*`,
-    reactionLord && `⚡ **${config.ROLES.REACTION_LORD}** → <@${reactionLord.userId}> *(${reactionLord.value} reactions)*`,
-    quoteIcon    && `🗣️ **${config.ROLES.QUOTE_ICON}** → <@${quoteIcon.userId}> *(${quoteIcon.value} correct guesses)*`,
+    mediaKing    && ` **${config.ROLES.MEDIA_KING}** → <@${mediaKing.userId}> *(${mediaKing.value} files)*`,
+    vcGoblin     && ` **${config.ROLES.VC_GOBLIN}** → <@${vcGoblin.userId}> *(${formatDuration(vcGoblin.value)})*`,
+    chatterbox   && ` **${config.ROLES.CHATTERBOX}** → <@${chatterbox.userId}> *(${chatterbox.value} messages)*`,
+    nightOwl     && ` **${config.ROLES.NIGHT_OWL}** → <@${nightOwl.userId}> *(${nightOwl.value} late-night msgs)*`,
+    reactionLord && ` **${config.ROLES.REACTION_LORD}** → <@${reactionLord.userId}> *(${reactionLord.value} reactions)*`,
+    quoteIcon    && ` **${config.ROLES.QUOTE_ICON}** → <@${quoteIcon.userId}> *(${quoteIcon.value} correct guesses)*`,
   ].filter(Boolean);
 
   embed.addFields({ name: '🎖️ This Week\'s Champions', value: lines.join('\n') || 'No winners this week!' });
