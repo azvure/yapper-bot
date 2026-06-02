@@ -20,8 +20,8 @@ guessWhoSchema.index({ guildId: 1, used: 1 });
 const guessWhoRoundSchema = new mongoose.Schema({
   guildId: { type: String, required: true },
   quoteId: { type: mongoose.Schema.Types.ObjectId, ref: 'GuessWho' },
-  discordMessageId: { type: String },               // the poll message in guess-who channel
-  correctUserId: { type: String, required: true },
+  discordMessageId: { type: String },
+  correctUserId: { type: String, default: null },
   votes: [{
     userId: String,
     username: String,

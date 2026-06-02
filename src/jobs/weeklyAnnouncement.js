@@ -12,7 +12,7 @@ const {
   syncVcStats,
 } = require('../utils/statsHelper');
 
-async function runWeeklyAnnouncement(client) {
+async function runWeeklyAnnouncement(client, options = {}) {
   const guildId = process.env.GUILD_ID;
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error('[Weekly] Guild not found');
@@ -25,15 +25,16 @@ async function runWeeklyAnnouncement(client) {
   await syncVcStats(guildId);
 
   const weekStart = getWeekStart();
-  const lastWeekStart = new Date(weekStart);
-  lastWeekStart.setUTCDate(lastWeekStart.getUTCDate() - 7);
+  // When running via cron (auto), pull last week. When running via /announce command, use current week unless --previous flag set.
+  const queryWeekStart = options.previous ? (() => { const d = new Date(weekStart); d.setUTCDate(d.getUTCDate() - 7); return d; })() : weekStart;
 
-  const stats = await WeeklyStats.findOne({ guildId, weekStart: lastWeekStart });
+  const stats = await WeeklyStats.findOne({ guildId, weekStart: queryWeekStart });
   if (!stats || stats.members.length === 0) {
     return channel.send('📊 No data collected this week. Get chatting!');
   }
 
-  if (stats.announced) return; // prevent duplicate announcements
+  // When running via cron, prevent duplicate announcements
+  if (!options.previous && stats.announced) return;
 
   const members = stats.members;
 
@@ -45,7 +46,7 @@ async function runWeeklyAnnouncement(client) {
   const reactionLord = getTopMember(members, 'reactionsGiven');
 
   // Guess-who winner: most correct votes cast in rounds this week
-  const weekRounds = await GuessWhoRound.find({ guildId, week: lastWeekStart, closed: true });
+  const weekRounds = await GuessWhoRound.find({ guildId, week: queryWeekStart, closed: true });
   const guessScores = {};
   for (const round of weekRounds) {
     for (const vote of round.votes) {
@@ -65,12 +66,12 @@ async function runWeeklyAnnouncement(client) {
   const awards = await rotateWeeklyRoles(guild, winners);
 
   // --- Build embed ---
-  const weekEndStr = new Date(lastWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1000);
+  const weekEndStr = new Date(queryWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1000);
   const fmt = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' });
 
   const embed = new EmbedBuilder()
     .setTitle('🏆 Weekly Wrap-Up')
-    .setDescription(`Here's how everyone did for the week of **${fmt(lastWeekStart)} – ${fmt(weekEndStr)}**.\nNew roles have been handed out. Let's go! 🎉`)
+    .setDescription(`Here's how everyone did for the week of **${fmt(queryWeekStart)} – ${fmt(weekEndStr)}**.\nNew roles have been handed out. Let's go! 🎉`)
     .setColor(0xf39c12)
     .setTimestamp();
 
@@ -97,8 +98,8 @@ async function runWeeklyAnnouncement(client) {
 
   await channel.send({ content: '@everyone', embeds: [embed] });
 
-  // Close all open guess-who rounds
-  await GuessWhoRound.updateMany({ guildId, closed: false }, { closed: true, closedAt: new Date() });
+  // Close all open guess-who rounds for this week
+  await GuessWhoRound.updateMany({ guildId, week: queryWeekStart, closed: false }, { closed: true, closedAt: new Date() });
 
   // Mark as announced & save week end
   stats.announced = true;
@@ -106,13 +107,13 @@ async function runWeeklyAnnouncement(client) {
   await stats.save();
 
   // Save role records
-  await WeeklyRoles.create({ guildId, week: lastWeekStart, awards });
+  await WeeklyRoles.create({ guildId, week: queryWeekStart, awards });
 
-  console.log('[Weekly] Announcement sent for week of', lastWeekStart.toISOString().split('T')[0]);
+  console.log('[Weekly] Announcement sent for week of', queryWeekStart.toISOString().split('T')[0]);
 }
 
 module.exports = function scheduleWeeklyAnnouncement(client) {
-  cron.schedule(config.WEEKLY_CRON, () => runWeeklyAnnouncement(client), {
+  cron.schedule(config.WEEKLY_CRON, () => runWeeklyAnnouncement(client, { previous: true }), {
     timezone: 'UTC',
   });
   console.log(`[Cron] Weekly announcement scheduled: ${config.WEEKLY_CRON}`);

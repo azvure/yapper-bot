@@ -1,8 +1,10 @@
+const { reconcileActiveSessions } = require('./voiceStateUpdate');
+
 module.exports = {
   name: 'ready',
   once: true,
-  execute(client) {
-    console.log(`[Bot] Logged in as ${client.user.tag}`);
-    client.user.setActivity('👀 watching the chaos unfold');
+  async execute(client) {
+    console.log(`[Ready] Bot logged in as ${client.user.tag}`);
+    await reconcileActiveSessions(client);
   },
 };
