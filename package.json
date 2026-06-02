@@ -1,0 +1,20 @@
+{
+  "name": "discord-weekly-bot",
+  "version": "1.0.0",
+  "description": "Weekly stats, guess who, and role assignment bot",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5",
+    "mongodb": "^7.2.0",
+    "mongoose": "^8.3.1",
+    "node-cron": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
