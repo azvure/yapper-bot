@@ -39,7 +39,10 @@ module.exports = {
         return interaction.reply({ content: `You already guessed **${alreadyVoted.guessedUserId === round.correctUserId ? '✅ correctly' : '❌ incorrectly'}**!`, ephemeral: true });
       }
 
-      const correct = guessedUserId === round.correctUserId;
+      // Determine if this is a vote-only round (no canonical correct answer)
+      const isVoteOnly = !round.correctUserId;
+      const correct = isVoteOnly ? null : guessedUserId === round.correctUserId;
+
       round.votes.push({
         userId: interaction.user.id,
         username: interaction.user.username,
@@ -48,31 +51,40 @@ module.exports = {
       });
       await round.save();
 
-      if (correct) {
-        // Award a stat point for correct guess
+      // Award stats only if there's a canonical correct answer and the guess was correct
+      if (correct === true) {
         await incrementStat(interaction.guild.id, interaction.user.id, interaction.user.username, 'reactionsGiven', 0);
-        // We track guess-who wins separately via the quote_icon logic in weeklyAnnouncement
       }
 
-      const member = await interaction.guild.members.fetch(round.correctUserId).catch(() => null);
-      const correctName = member ? member.displayName : 'Unknown';
+      let replyContent = '';
+      if (isVoteOnly) {
+        const totalVotes = round.votes.length;
+        replyContent = `✅ Vote recorded! ${totalVotes} guess${totalVotes !== 1 ? 'es' : ''} so far.`;
+      } else {
+        const member = await interaction.guild.members.fetch(round.correctUserId).catch(() => null);
+        const correctName = member ? member.displayName : 'Unknown';
+        replyContent = correct
+          ? `✅ **Correct!** It was ${correctName}! Nice one.`
+          : `❌ **Wrong!** Better luck next time — it was actually **${correctName}**.`;
+      }
 
       await interaction.reply({
-        content: correct
-          ? `✅ **Correct!** It was ${correctName}! Nice one.`
-          : `❌ **Wrong!** Better luck next time — it was actually **${correctName}**.`,
+        content: replyContent,
         ephemeral: true,
       });
 
       // Update vote count on the embed
       const totalVotes = round.votes.length;
-      const correctVotes = round.votes.filter(v => v.correct).length;
+      const correctVotes = isVoteOnly ? 0 : round.votes.filter(v => v.correct).length;
 
       try {
         const msg = await interaction.channel.messages.fetch(round.discordMessageId);
         if (msg) {
+          const footer = isVoteOnly
+            ? `${totalVotes} guess${totalVotes !== 1 ? 'es' : ''} so far`
+            : `${totalVotes} guess${totalVotes !== 1 ? 'es' : ''} so far • ${correctVotes} correct`;
           const updatedEmbed = EmbedBuilder.from(msg.embeds[0])
-            .setFooter({ text: `${totalVotes} guess${totalVotes !== 1 ? 'es' : ''} so far • ${correctVotes} correct` });
+            .setFooter({ text: footer });
           await msg.edit({ embeds: [updatedEmbed] });
         }
       } catch { /* message may have been deleted */ }

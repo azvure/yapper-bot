@@ -122,6 +122,12 @@ async function ensureRole(guild, roleName, color = 0x5865f2) {
  * Strip all weekly award roles from all members, then award new ones.
  */
 async function rotateWeeklyRoles(guild, winners) {
+  // Check if bot has ManageRoles permission
+  if (!guild.members.me.permissions.has('ManageRoles')) {
+    console.warn(`[${guild.name}] Bot lacks ManageRoles permission. Please move the bot role higher in the hierarchy.`);
+    return [];
+  }
+
   const roleNames = Object.values(config.ROLES);
 
   // Fetch all members
@@ -131,6 +137,13 @@ async function rotateWeeklyRoles(guild, winners) {
   for (const roleName of roleNames) {
     const role = guild.roles.cache.find(r => r.name === roleName);
     if (!role) continue;
+
+    // Check if bot can manage this role (bot's highest role must be above the target role)
+    if (guild.members.me.roles.highest.comparePositionTo(role) <= 0) {
+      console.warn(`[${guild.name}] Bot role is too low to manage "${roleName}". Please move the bot role higher.`);
+      continue;
+    }
+
     for (const [, member] of role.members) {
       await member.roles.remove(role).catch(() => {});
     }
@@ -144,6 +157,13 @@ async function rotateWeeklyRoles(guild, winners) {
     const roleName = config.ROLES[roleKey];
     const roleColor = ROLE_COLORS[roleKey] || 0x5865f2;
     const role = await ensureRole(guild, roleName, roleColor);
+
+    // Verify bot can manage this role before attempting assignment
+    if (guild.members.me.roles.highest.comparePositionTo(role) <= 0) {
+      console.warn(`[${guild.name}] Cannot assign "${roleName}" — bot role too low.`);
+      continue;
+    }
+
     const member = guild.members.cache.get(winner.userId);
     if (member) {
       await member.roles.add(role).catch(() => {});
