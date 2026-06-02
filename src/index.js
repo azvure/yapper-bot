@@ -32,12 +32,13 @@ const eventsPath = path.join(__dirname, 'events');
 const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
 for (const file of eventFiles) {
   const event = require(path.join(eventsPath, file));
+  const eventName = event.name === 'ready' ? 'clientReady' : event.name;
   if (event.once) {
-    client.once(event.name, (...args) => event.execute(...args, client));
+    client.once(eventName, (...args) => event.execute(...args, client));
   } else {
-    client.on(event.name, (...args) => event.execute(...args, client));
+    client.on(eventName, (...args) => event.execute(...args, client));
   }
-  console.log(`[Events] Loaded: ${event.name}`);
+  console.log(`[Events] Loaded: ${eventName}`);
 }
 
 // Connect to MongoDB then login
@@ -48,7 +49,7 @@ mongoose
     return client.login(process.env.DISCORD_TOKEN);
   })
   .then(() => {
-    // Start cron jobs after login
+    // VC reconciliation and cron jobs will start after clientReady event fires
     require('./jobs/weeklyAnnouncement')(client);
     require('./jobs/guessWho')(client);
     console.log('[Cron] Jobs scheduled');
