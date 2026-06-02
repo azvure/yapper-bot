@@ -17,16 +17,12 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// Health check server (required for Render deployment)
+// Health check server
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', bot: client.user?.tag || 'not ready' });
-});
-
-app.listen(PORT, () => {
-  console.log(`[Health Check] Server listening on port ${PORT}`);
 });
 
 // Load commands
@@ -54,20 +50,20 @@ for (const file of eventFiles) {
   console.log(`[Events] Loaded: ${eventName}`);
 }
 
-// Connect to MongoDB then login
+// ─── Start ────────────────────────────────────────────────────────────────────
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('[DB] Connected to MongoDB');
+    app.listen(PORT, () => console.log(`🌐 Web server on port ${PORT}`));
     return client.login(process.env.DISCORD_TOKEN);
   })
   .then(() => {
-    // VC reconciliation and cron jobs will start after clientReady event fires
     require('./jobs/weeklyAnnouncement')(client);
     require('./jobs/guessWho')(client);
     console.log('[Cron] Jobs scheduled');
   })
   .catch(err => {
-    console.error('[Fatal]', err);
+    console.error('Startup error:', err);
     process.exit(1);
   });
