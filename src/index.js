@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
 
 const client = new Client({
   intents: [
@@ -15,6 +16,18 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+
+// Health check server (required for Render deployment)
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', bot: client.user?.tag || 'not ready' });
+});
+
+app.listen(PORT, () => {
+  console.log(`[Health Check] Server listening on port ${PORT}`);
+});
 
 // Load commands
 const commandsPath = path.join(__dirname, 'commands');
