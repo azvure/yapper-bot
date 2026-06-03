@@ -138,6 +138,47 @@ function formatDuration(seconds) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+async function rotateWeeklyRoles(guild, winners) {
+  const awards = [];
+
+  for (const [key, winner] of Object.entries(winners)) {
+    if (!winner) continue;
+
+    const roleName = config.ROLES[key];
+    if (!roleName) continue;
+
+    // Find or create the role
+    let role = guild.roles.cache.find(r => r.name === roleName);
+    if (!role) {
+      role = await guild.roles.create({
+        name: roleName,
+        reason: 'Weekly award role',
+      });
+    }
+
+    // Get the winning member
+    const member = await guild.members.fetch(winner.userId).catch(() => null);
+    if (member) {
+      try {
+        await member.roles.add(role);
+      } catch (err) {
+        console.error(`[rotateWeeklyRoles] Failed to add role to ${winner.username}:`, err.message);
+      }
+    }
+
+    awards.push({
+      roleKey: key,
+      roleName,
+      roleId: role.id,
+      userId: winner.userId,
+      username: winner.username,
+      value: winner.value,
+    });
+  }
+
+  return awards;
+}
+
 module.exports = {
   getWeekStart,
   getWeekStartFromOffset,
@@ -146,4 +187,5 @@ module.exports = {
   syncVcStats,
   getTopMember,
   formatDuration,
+  rotateWeeklyRoles,
 };
