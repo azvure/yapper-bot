@@ -11,10 +11,10 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
     try {
       await run(client);
-      await interaction.editReply('✅ Guess-who round posted!');
+      await interaction.editReply('Guess-who round posted.');
     } catch (err) {
       console.error('[/guesswho]', err);
-      await interaction.editReply('❌ Failed to post a round: ' + err.message);
+      await interaction.editReply('Failed: ' + err.message);
     }
   },
 };

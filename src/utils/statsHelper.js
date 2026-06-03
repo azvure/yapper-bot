@@ -1,23 +1,16 @@
 const WeeklyStats = require('../models/WeeklyStats');
 const VoiceSession = require('../models/VoiceSession');
-const WeeklyRoles = require('../models/WeeklyRoles');
 const config = require('../../config');
 
-/**
- * Returns the Monday 00:00:00 UTC of the week containing `date`.
- */
 function getWeekStart(date = new Date()) {
   const d = new Date(date);
-  const day = d.getUTCDay(); // 0=Sun
+  const day = d.getUTCDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setUTCDate(d.getUTCDate() + diff);
   d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
-/**
- * Get or create the WeeklyStats document for the current week.
- */
 async function getCurrentWeekStats(guildId) {
   const weekStart = getWeekStart();
   let doc = await WeeklyStats.findOne({ guildId, weekStart });
@@ -27,38 +20,36 @@ async function getCurrentWeekStats(guildId) {
   return doc;
 }
 
-/**
- * Upsert a member's stats for the current week.
- */
 async function incrementStat(guildId, userId, username, field, amount = 1) {
   const weekStart = getWeekStart();
-  await WeeklyStats.findOneAndUpdate(
+  const result = await WeeklyStats.findOneAndUpdate(
     { guildId, weekStart, 'members.userId': userId },
     { $inc: { [`members.$.${field}`]: amount } },
     { new: true }
-  ).then(async result => {
-    if (!result) {
-      // Member not yet in this week's stats — add them
-      await WeeklyStats.findOneAndUpdate(
-        { guildId, weekStart },
-        {
-          $push: {
-            members: { userId, username, [field]: amount },
-          },
-          $setOnInsert: { weekStart },
-        },
-        { upsert: true, new: true }
-      );
-    }
-  });
+  );
+
+  if (!result) {
+    await WeeklyStats.findOneAndUpdate(
+      { guildId, weekStart },
+      {
+        $push: { members: { userId, username, [field]: amount } },
+        $setOnInsert: { weekStart },
+      },
+      { upsert: true, new: true }
+    );
+  }
 }
 
-/**
- * Aggregate VC session durations into the current week's stats.
- */
 async function syncVcStats(guildId) {
   const weekStart = getWeekStart();
-  const sessions = await VoiceSession.find({ guildId, week: weekStart, leftAt: { $ne: null } });
+
+  // Use active: false to find completed sessions (DB-persisted approach)
+  const sessions = await VoiceSession.find({
+    guildId,
+    week: weekStart,
+    active: false,
+    durationSeconds: { $gt: 0 },
+  });
 
   const totals = {};
   for (const s of sessions) {
@@ -79,10 +70,6 @@ async function syncVcStats(guildId) {
   }
 }
 
-/**
- * Get the top member for a given stat field.
- * Returns { userId, username, value } or null.
- */
 function getTopMember(members, field) {
   if (!members || members.length === 0) return null;
   const sorted = [...members].sort((a, b) => (b[field] || 0) - (a[field] || 0));
@@ -91,9 +78,6 @@ function getTopMember(members, field) {
   return { userId: top.userId, username: top.username, value: top[field] };
 }
 
-/**
- * Format VC seconds into a human-readable string.
- */
 function formatDuration(seconds) {
   if (!seconds) return '0m';
   const h = Math.floor(seconds / 3600);
@@ -102,9 +86,6 @@ function formatDuration(seconds) {
   return `${m}m`;
 }
 
-/**
- * Ensure a Discord role exists (create if not). Returns the Role object.
- */
 async function ensureRole(guild, roleName, color = 0x5865f2) {
   let role = guild.roles.cache.find(r => r.name === roleName);
   if (!role) {
@@ -118,32 +99,22 @@ async function ensureRole(guild, roleName, color = 0x5865f2) {
   return role;
 }
 
-/**
- * Strip all weekly award roles from all members, then award new ones.
- */
 async function rotateWeeklyRoles(guild, winners) {
-  // Check if bot has ManageRoles permission
   if (!guild.members.me.permissions.has('ManageRoles')) {
-    console.warn(`[${guild.name}] Bot lacks ManageRoles permission. Please move the bot role higher in the hierarchy.`);
+    console.warn(`[${guild.name}] Bot lacks ManageRoles permission`);
     return [];
   }
 
   const roleNames = Object.values(config.ROLES);
-
-  // Fetch all members
   await guild.members.fetch();
 
-  // Remove all current weekly role holders
   for (const roleName of roleNames) {
     const role = guild.roles.cache.find(r => r.name === roleName);
     if (!role) continue;
-
-    // Check if bot can manage this role (bot's highest role must be above the target role)
     if (guild.members.me.roles.highest.comparePositionTo(role) <= 0) {
-      console.warn(`[${guild.name}] Bot role is too low to manage "${roleName}". Please move the bot role higher.`);
+      console.warn(`[Roles] Bot role too low to manage "${roleName}"`);
       continue;
     }
-
     for (const [, member] of role.members) {
       await member.roles.remove(role).catch(() => {});
     }
@@ -151,16 +122,14 @@ async function rotateWeeklyRoles(guild, winners) {
 
   const awards = [];
 
-  // Award new roles
   for (const [roleKey, winner] of Object.entries(winners)) {
     if (!winner) continue;
     const roleName = config.ROLES[roleKey];
     const roleColor = ROLE_COLORS[roleKey] || 0x5865f2;
     const role = await ensureRole(guild, roleName, roleColor);
 
-    // Verify bot can manage this role before attempting assignment
     if (guild.members.me.roles.highest.comparePositionTo(role) <= 0) {
-      console.warn(`[${guild.name}] Cannot assign "${roleName}" — bot role too low.`);
+      console.warn(`[Roles] Cannot assign "${roleName}" — bot role too low`);
       continue;
     }
 

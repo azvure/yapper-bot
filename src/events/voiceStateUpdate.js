@@ -1,12 +1,8 @@
 const VoiceSession = require('../models/VoiceSession');
 const { getWeekStart } = require('../utils/statsHelper');
 
-/**
- * Startup reconciliation: create missing active VoiceSession documents
- * for members already in voice channels (handles Render restarts).
- */
 async function reconcileActiveSessions(client) {
-  console.log('[VC Reconciliation] Starting up...');
+  console.log('[VC] Reconciling active sessions on startup...');
   for (const guild of client.guilds.cache.values()) {
     try {
       await guild.members.fetch();
@@ -28,21 +24,18 @@ async function reconcileActiveSessions(client) {
             week: getWeekStart(),
             active: true,
           });
-          console.log(
-            `[VC Reconciliation] Created session for ${member.user.username} in ${guild.name}`
-          );
+          console.log(`[VC] Reconciled session for ${member.user.username}`);
         }
       }
     } catch (err) {
-      console.error(`[VC Reconciliation] Error in guild ${guild.id}:`, err);
+      console.error(`[VC] Reconciliation error in guild ${guild.id}:`, err);
     }
   }
-  console.log('[VC Reconciliation] Complete');
+  console.log('[VC] Reconciliation complete');
 }
 
 module.exports = {
   name: 'voiceStateUpdate',
-  isReadyHandler: false,
 
   async execute(oldState, newState) {
     const guild = newState.guild || oldState.guild;
@@ -51,7 +44,7 @@ module.exports = {
     const member =
       newState.member ||
       oldState.member ||
-      (await guild.members.fetch(newState.id).catch(() => null));
+      (await guild.members.fetch(newState.id || oldState.id).catch(() => null));
 
     if (!member || member.user.bot) return;
 
@@ -62,12 +55,8 @@ module.exports = {
     const left = oldState.channelId && !newState.channelId;
 
     if (joined) {
-      const existing = await VoiceSession.findOne({
-        guildId,
-        userId,
-        active: true,
-      });
-
+      // Avoid duplicate active sessions
+      const existing = await VoiceSession.findOne({ guildId, userId, active: true });
       if (!existing) {
         await VoiceSession.create({
           guildId,
@@ -81,27 +70,22 @@ module.exports = {
     }
 
     if (left) {
-      const session = await VoiceSession.findOne({
-        guildId,
-        userId,
-        active: true,
-      });
-
+      const session = await VoiceSession.findOne({ guildId, userId, active: true });
       if (!session) return;
 
       const leftAt = new Date();
+      const durationSeconds = Math.floor((leftAt - session.joinedAt) / 1000);
+
+      if (durationSeconds < 10) {
+        // Too short, discard
+        await session.deleteOne();
+        return;
+      }
 
       session.leftAt = leftAt;
-      session.durationSeconds = Math.floor(
-        (leftAt - session.joinedAt) / 1000
-      );
+      session.durationSeconds = durationSeconds;
       session.active = false;
-
-      if (session.durationSeconds >= 10) {
-        await session.save();
-      } else {
-        await session.deleteOne();
-      }
+      await session.save();
     }
   },
 

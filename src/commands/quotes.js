@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { GuessWho } = require('../models/GuessWho');
 
 module.exports = {
@@ -6,12 +6,10 @@ module.exports = {
     .setName('quotes')
     .setDescription('Manage the out-of-context quote vault')
     .addSubcommand(sub =>
-      sub.setName('count')
-        .setDescription('See how many unused quotes are in the vault')
+      sub.setName('count').setDescription('See how many unused quotes are in the vault')
     )
     .addSubcommand(sub =>
-      sub.setName('reset')
-        .setDescription('Mark all quotes as unused (recycles the vault)')
+      sub.setName('reset').setDescription('Mark all quotes as unused (recycles the vault)')
     ),
 
   async execute(interaction) {
@@ -22,15 +20,15 @@ module.exports = {
     if (sub === 'count') {
       const unused = await GuessWho.countDocuments({ guildId, used: false });
       const total  = await GuessWho.countDocuments({ guildId });
-      return interaction.editReply(`📦 Quote Vault: **${unused} unused** / ${total} total`);
+      return interaction.editReply(`Quote vault: ${unused} unused / ${total} total`);
     }
 
     if (sub === 'reset') {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
-        return interaction.editReply('❌ You need Manage Server permission to do that.');
+        return interaction.editReply('You need Manage Server permission to do that.');
       }
       const result = await GuessWho.updateMany({ guildId, used: true }, { used: false, usedAt: null });
-      return interaction.editReply(`♻️ Reset **${result.modifiedCount}** quotes back to unused.`);
+      return interaction.editReply(`Reset ${result.modifiedCount} quotes back to unused.`);
     }
   },
 };

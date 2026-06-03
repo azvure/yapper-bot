@@ -31,7 +31,7 @@ async function runWeeklyAnnouncement(client) {
 
   const stats = await WeeklyStats.findOne({ guildId, weekStart: lastWeekStart });
   if (!stats || stats.members.length === 0) {
-    return announceCh.send('📊 No data collected this week. Get chatting!');
+    return announceCh.send('No data collected this week.');
   }
 
   if (stats.announced) return;
@@ -44,7 +44,7 @@ async function runWeeklyAnnouncement(client) {
   const nightOwl     = getTopMember(members, 'lateNightMessages');
   const reactionLord = getTopMember(members, 'reactionsGiven');
 
-  // Close any still-open rounds and reveal them
+  // Close any open guess-who rounds and reveal them before announcing
   const openRounds = await GuessWhoRound.find({ guildId, closed: false });
   for (const openRound of openRounds) {
     if (guessCh) {
@@ -54,7 +54,7 @@ async function runWeeklyAnnouncement(client) {
     }
   }
 
-  // Quote Icon = person who got the most votes across all rounds this week
+  // Quote Icon = person who received the most votes across all rounds this week
   const weekRounds = await GuessWhoRound.find({ guildId, week: lastWeekStart, closed: true });
   const voteTally = {};
   for (const round of weekRounds) {
@@ -88,42 +88,40 @@ async function runWeeklyAnnouncement(client) {
   const fmt = d => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' });
 
   const embed = new EmbedBuilder()
-    .setTitle('🏆 Weekly Wrap-Up')
-    .setDescription(
-      `Here's how everyone did for the week of **${fmt(lastWeekStart)} – ${fmt(weekEnd)}**.\n` +
-      `New roles have been handed out. Let's go! 🎉`
-    )
+    .setTitle('Weekly Wrap-Up')
+    .setDescription(`Week of ${fmt(lastWeekStart)} to ${fmt(weekEnd)}. Roles have been updated.`)
     .setColor(0xf39c12)
     .setTimestamp();
 
   const championLines = [
-    mediaKing    && `📸 **${config.ROLES.MEDIA_KING}** → <@${mediaKing.userId}> *(${mediaKing.value} files)*`,
-    vcGoblin     && `🎙️ **${config.ROLES.VC_GOBLIN}** → <@${vcGoblin.userId}> *(${formatDuration(vcGoblin.value)})*`,
-    chatterbox   && `💬 **${config.ROLES.CHATTERBOX}** → <@${chatterbox.userId}> *(${chatterbox.value} messages)*`,
-    nightOwl     && `🦉 **${config.ROLES.NIGHT_OWL}** → <@${nightOwl.userId}> *(${nightOwl.value} late-night msgs)*`,
-    reactionLord && `⚡ **${config.ROLES.REACTION_LORD}** → <@${reactionLord.userId}> *(${reactionLord.value} reactions)*`,
-    quoteIcon    && `🗣️ **${config.ROLES.QUOTE_ICON}** → <@${quoteIcon.userId}> *(${quoteIcon.value} votes in guess-who)*`,
+    mediaKing    && `${config.ROLES.MEDIA_KING} — <@${mediaKing.userId}> (${mediaKing.value} files)`,
+    vcGoblin     && `${config.ROLES.VC_GOBLIN} — <@${vcGoblin.userId}> (${formatDuration(vcGoblin.value)})`,
+    chatterbox   && `${config.ROLES.CHATTERBOX} — <@${chatterbox.userId}> (${chatterbox.value} messages)`,
+    nightOwl     && `${config.ROLES.NIGHT_OWL} — <@${nightOwl.userId}> (${nightOwl.value} late-night messages)`,
+    reactionLord && `${config.ROLES.REACTION_LORD} — <@${reactionLord.userId}> (${reactionLord.value} reactions)`,
+    quoteIcon    && `${config.ROLES.QUOTE_ICON} — <@${quoteIcon.userId}> (${quoteIcon.value} votes)`,
   ].filter(Boolean);
 
   embed.addFields({
-    name: '🎖️ This Week\'s Champions',
-    value: championLines.join('\n') || 'No winners this week!',
+    name: 'This Week\'s Winners',
+    value: championLines.join('\n') || 'No winners this week.',
   });
 
   const top3 = [...members]
     .sort((a, b) => (b.messageCount || 0) - (a.messageCount || 0))
     .slice(0, 3);
+
   if (top3.length > 0) {
-    const medals = ['🥇', '🥈', '🥉'];
+    const medals = ['1.', '2.', '3.'];
     embed.addFields({
-      name: '📊 Top Chatters',
+      name: 'Top Chatters',
       value: top3.map((m, i) =>
         `${medals[i]} <@${m.userId}> — ${m.messageCount || 0} messages, ${formatDuration(m.vcSeconds)} VC`
       ).join('\n'),
     });
   }
 
-  embed.setFooter({ text: 'Stats reset every Monday • Roles last one week' });
+  embed.setFooter({ text: 'Stats reset every Monday. Roles last one week.' });
 
   await announceCh.send({ embeds: [embed] });
 

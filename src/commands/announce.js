@@ -11,10 +11,10 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
     try {
       await run(client);
-      await interaction.editReply('✅ Weekly announcement sent!');
+      await interaction.editReply('Weekly announcement sent.');
     } catch (err) {
       console.error('[/announce]', err);
-      await interaction.editReply('❌ Failed: ' + err.message);
+      await interaction.editReply('Failed: ' + err.message);
     }
   },
 };

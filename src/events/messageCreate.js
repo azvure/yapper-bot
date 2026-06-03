@@ -2,7 +2,6 @@ const { incrementStat } = require('../utils/statsHelper');
 const { GuessWho } = require('../models/GuessWho');
 const config = require('../../config');
 
-// Media attachment MIME type prefixes
 const MEDIA_TYPES = ['image/', 'video/', 'audio/'];
 
 function isMediaAttachment(attachment) {
@@ -26,23 +25,18 @@ module.exports = {
     const userId = author.id;
     const username = author.username;
 
-    // Always count message
     await incrementStat(guildId, userId, username, 'messageCount');
 
-    // Late night message
     if (isLateNight(message.createdAt)) {
       await incrementStat(guildId, userId, username, 'lateNightMessages');
     }
 
-    // Media attachments
     const mediaFiles = attachments.filter(a => isMediaAttachment(a));
     if (mediaFiles.size > 0) {
       await incrementStat(guildId, userId, username, 'mediaCount', mediaFiles.size);
     }
 
-    // --- Sync out-of-context channel quotes into DB ---
     if (config.OUT_OF_CONTEXT_CHANNEL && message.channelId === config.OUT_OF_CONTEXT_CHANNEL) {
-      // Only save if there's text content or a media attachment
       const hasContent = message.content.trim().length > 0;
       const mediaAttachment = attachments.find(a => isMediaAttachment(a));
 
