@@ -7,6 +7,7 @@ const { GuessWhoRound } = require('../models/GuessWho');
 const { closeRound } = require('./guessWho');
 
 const {
+  getWeekStart,
   getWeekStartFromOffset,
   getTopMember,
   formatDuration,
@@ -28,7 +29,7 @@ async function runWeeklyAnnouncement(client, force = false) {
   await syncVcStats(guildId);
 
   // ✅ CLEAN WEEK SYSTEM (NO DATE DRIFT)
-  const lastWeekStart = getWeekStartFromOffset(1);
+ const lastWeekStart = getWeekStart();
 
   const stats = await WeeklyStats.findOne({
     guildId,
