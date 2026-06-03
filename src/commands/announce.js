@@ -5,16 +5,23 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('announce')
     .setDescription('Trigger the weekly announcement now (admin only)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.ManageGuild
+    ),
 
   async execute(interaction, client) {
     await interaction.deferReply({ ephemeral: true });
+
     try {
-      await run(client);
-      await interaction.editReply('Weekly announcement sent.');
+      await run(client, true);
+      await interaction.editReply(
+        'Weekly announcement force-triggered.'
+      );
     } catch (err) {
       console.error('[/announce]', err);
-      await interaction.editReply('Failed: ' + err.message);
+      await interaction.editReply(
+        `Failed: ${err.message}`
+      );
     }
   },
 };

@@ -105,83 +105,128 @@ async function postGuessWho(client) {
 
 async function closeRound(roundId, guild, channel) {
   const round = await GuessWhoRound.findById(roundId);
-  if (!round || round.closed) return null;
+
+  if (!round || round.closed) {
+    return null;
+  }
 
   round.closed = true;
   round.closedAt = new Date();
   await round.save();
 
   const tally = {};
+
   for (const vote of round.votes) {
-    if (!tally[vote.guessedUserId]) tally[vote.guessedUserId] = { count: 0 };
+    if (!tally[vote.guessedUserId]) {
+      tally[vote.guessedUserId] = { count: 0 };
+    }
+
     tally[vote.guessedUserId].count++;
   }
 
-  const sorted = Object.entries(tally).sort((a, b) => b[1].count - a[1].count);
-
-  const authorMember = await guild.members.fetch(round.authorId).catch(() => null);
-  const authorName = authorMember ? authorMember.displayName : round.authorUsername;
+  const sorted = Object.entries(tally)
+    .sort((a, b) => b[1].count - a[1].count);
 
   const resultsEmbed = new EmbedBuilder()
     .setTitle('Round Closed')
     .setColor(0xf39c12)
     .setTimestamp();
 
-  resultsEmbed.addFields({
-    name: 'It was said by',
-    value: `<@${round.authorId}> (${authorName})`,
-  });
-
   if (sorted.length > 0) {
     const voteLines = await Promise.all(
       sorted.slice(0, 10).map(async ([userId, data]) => {
-        const m = await guild.members.fetch(userId).catch(() => null);
-        const name = m ? m.displayName : userId;
-        const isAuthor = userId === round.authorId;
-        return `${isAuthor ? '[correct]' : '[wrong]'} ${name} — ${data.count} vote${data.count !== 1 ? 's' : ''}`;
+        const member = await guild.members
+          .fetch(userId)
+          .catch(() => null);
+
+        const name = member
+          ? member.displayName
+          : userId;
+
+        return `${name} — ${data.count} vote${data.count !== 1 ? 's' : ''}`;
       })
     );
-    resultsEmbed.addFields({ name: 'Vote Breakdown', value: voteLines.join('\n') });
-  } else {
-    resultsEmbed.addFields({ name: 'Votes', value: 'Nobody voted this round.' });
-  }
 
-  const winner = sorted[0];
-  if (winner) {
-    const winnerMember = await guild.members.fetch(winner[0]).catch(() => null);
-    const winnerName = winnerMember ? winnerMember.displayName : winner[0];
     resultsEmbed.addFields({
-      name: 'Most Voted',
-      value: `<@${winner[0]}> (${winnerName}) with ${winner[1].count} vote${winner[1].count !== 1 ? 's' : ''} — in the running for Quote Icon this week.`,
+      name: 'Vote Breakdown',
+      value: voteLines.join('\n'),
+    });
+  } else {
+    resultsEmbed.addFields({
+      name: 'Votes',
+      value: 'Nobody voted this round.',
     });
   }
 
-  // Disable original message components
+  const winner = sorted[0];
+
+  if (winner) {
+    const winnerMember = await guild.members
+      .fetch(winner[0])
+      .catch(() => null);
+
+    const winnerName = winnerMember
+      ? winnerMember.displayName
+      : winner[0];
+
+    resultsEmbed.addFields({
+      name: 'Round Winner',
+      value:
+        `<@${winner[0]}> (${winnerName}) won this round with ` +
+        `${winner[1].count} vote${winner[1].count !== 1 ? 's' : ''}.`,
+    });
+  }
+
   try {
-    const origMsg = await channel.messages.fetch(round.discordMessageId);
+    const origMsg = await channel.messages.fetch(
+      round.discordMessageId
+    );
+
     if (origMsg) {
       const disabledSelect = new StringSelectMenuBuilder()
         .setCustomId('guesswho:closed')
         .setPlaceholder('This round is closed')
         .setDisabled(true)
-        .addOptions([new StringSelectMenuOptionBuilder().setLabel('Closed').setValue('closed')]);
+        .addOptions([
+          new StringSelectMenuOptionBuilder()
+            .setLabel('Closed')
+            .setValue('closed'),
+        ]);
+
       const disabledButton = new ButtonBuilder()
         .setCustomId('guesswho_close:closed')
         .setLabel('Round Closed')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(true);
+
       await origMsg.edit({
         components: [
-          new ActionRowBuilder().addComponents(disabledSelect),
-          new ActionRowBuilder().addComponents(disabledButton),
+          new ActionRowBuilder().addComponents(
+            disabledSelect
+          ),
+          new ActionRowBuilder().addComponents(
+            disabledButton
+          ),
         ],
       });
     }
-  } catch { /* message deleted */ }
+  } catch {
+    // original message deleted
+  }
 
-  await channel.send({ embeds: [resultsEmbed] });
+  await channel.send({
+    embeds: [resultsEmbed],
+  });
 
-  return { round, winner: winner ? { userId: winner[0], count: winner[1].count } : null };
+  return {
+    round,
+    winner: winner
+      ? {
+          userId: winner[0],
+          count: winner[1].count,
+        }
+      : null,
+  };
 }
 
 module.exports = function scheduleGuessWho(client) {
