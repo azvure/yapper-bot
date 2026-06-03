@@ -4,6 +4,8 @@ const {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require('discord.js');
 const config = require('../../config');
 const { GuessWho, GuessWhoRound } = require('../models/GuessWho');
@@ -18,22 +20,19 @@ async function postGuessWho(client) {
   const channel = guild.channels.cache.get(channelId);
   if (!channel) return console.error('[GuessWho] Guess-who channel not found');
 
-  // Close any previous open rounds
   await GuessWhoRound.updateMany({ guildId, closed: false }, { closed: true, closedAt: new Date() });
 
-  // Pick a random unused quote
   const unused = await GuessWho.aggregate([
     { $match: { guildId, used: false } },
     { $sample: { size: 1 } },
   ]);
 
   if (!unused || unused.length === 0) {
-    return channel.send('😔 No unused quotes left in the out-of-context-shit channel! Add more to <#' + (config.OUT_OF_CONTEXT_CHANNEL || 'out-of-context') + '>.');
+    return channel.send('😔 No unused quotes left in the vault! Add more to <#' + (config.OUT_OF_CONTEXT_CHANNEL || 'out-of-context') + '>.');
   }
 
   const quote = unused[0];
 
-  // Fetch all non-bot members
   await guild.members.fetch();
   const humanMembers = guild.members.cache.filter(m => !m.user.bot);
 
@@ -41,25 +40,29 @@ async function postGuessWho(client) {
     return channel.send('❌ Not enough members to build a guess-who poll.');
   }
 
-  // Build select menu options (max 25 per Discord limit)
-  const options = humanMembers
+  const options = [...humanMembers.values()]
+    .slice(0, 25)
     .map(m => new StringSelectMenuOptionBuilder()
       .setLabel(m.displayName.slice(0, 100))
       .setValue(m.id)
-    )
-    .slice(0, 25);
+    );
 
   const select = new StringSelectMenuBuilder()
-    .setCustomId(`guesswho:PLACEHOLDER`) // replaced after round is saved
-    .setPlaceholder('Who said this?')
+    .setCustomId('guesswho:PLACEHOLDER')
+    .setPlaceholder('Who said this? 🤔')
     .addOptions(options);
 
-  // Build embed
+  const closeButton = new ButtonBuilder()
+    .setCustomId('guesswho_close:PLACEHOLDER')
+    .setLabel('Close Round (Admin)')
+    .setStyle(ButtonStyle.Danger)
+    .setEmoji('🔒');
+
   const embed = new EmbedBuilder()
-    .setTitle('Guess Who Said This?')
+    .setTitle('🕵️ Guess Who Said This?')
     .setColor(0x6c5ce7)
     .setTimestamp()
-    .setFooter({ text: '0 guesses so far' });
+    .setFooter({ text: '0 votes so far • Reveal on Monday 👀' });
 
   if (quote.content) {
     embed.setDescription(`> ${quote.content.split('\n').join('\n> ')}`);
@@ -68,42 +71,122 @@ async function postGuessWho(client) {
   if (quote.attachmentUrl) {
     if (quote.attachmentType === 'image') {
       embed.setImage(quote.attachmentUrl);
-    } else if (quote.attachmentType === 'video' || quote.attachmentType === 'audio') {
-      embed.addFields({ name: '📎 Media attached', value: `[Click to view](${quote.attachmentUrl})` });
+    } else {
+      embed.addFields({ name: '📎 Media', value: `[Click to view](${quote.attachmentUrl})` });
     }
   }
 
-  // Create round in DB first so we have an ID
   const weekStart = getWeekStart();
   const round = await GuessWhoRound.create({
     guildId,
     quoteId: quote._id,
-    correctUserId: quote.authorId,
+    authorId: quote.authorId,
+    authorUsername: quote.authorUsername,
     votes: [],
     week: weekStart,
   });
 
-  // Update select menu custom ID with real round ID
   select.setCustomId(`guesswho:${round._id}`);
-  const row = new ActionRowBuilder().addComponents(select);
+  closeButton.setCustomId(`guesswho_close:${round._id}`);
 
-  const msg = await channel.send({ embeds: [embed], components: [row] });
+  const selectRow = new ActionRowBuilder().addComponents(select);
+  const buttonRow = new ActionRowBuilder().addComponents(closeButton);
 
-  // Save message ID to round
+  const msg = await channel.send({ embeds: [embed], components: [selectRow, buttonRow] });
+
   round.discordMessageId = msg.id;
   await round.save();
 
-  // Mark quote as used
   await GuessWho.findByIdAndUpdate(quote._id, { used: true, usedAt: new Date() });
 
-  console.log(`[GuessWho] Posted round ${round._id} (quote by ${quote.authorUsername})`);
+  console.log(`[GuessWho] Posted round ${round._id} (author hidden: ${quote.authorUsername})`);
+}
+
+async function closeRound(roundId, guild, channel) {
+  const round = await GuessWhoRound.findById(roundId);
+  if (!round || round.closed) return null;
+
+  round.closed = true;
+  round.closedAt = new Date();
+  await round.save();
+
+  const tally = {};
+  for (const vote of round.votes) {
+    if (!tally[vote.guessedUserId]) tally[vote.guessedUserId] = { count: 0 };
+    tally[vote.guessedUserId].count++;
+  }
+
+  const sorted = Object.entries(tally).sort((a, b) => b[1].count - a[1].count);
+
+  const authorMember = await guild.members.fetch(round.authorId).catch(() => null);
+  const authorName = authorMember ? authorMember.displayName : round.authorUsername;
+
+  const resultsEmbed = new EmbedBuilder()
+    .setTitle('🔓 Round Closed — Here\'s Who Said It!')
+    .setColor(0xf39c12)
+    .setTimestamp();
+
+  resultsEmbed.addFields({
+    name: '✍️ It was actually...',
+    value: `<@${round.authorId}> (${authorName})`,
+  });
+
+  if (sorted.length > 0) {
+    const voteLines = await Promise.all(
+      sorted.slice(0, 10).map(async ([userId, data]) => {
+        const m = await guild.members.fetch(userId).catch(() => null);
+        const name = m ? m.displayName : userId;
+        const isAuthor = userId === round.authorId;
+        return `${isAuthor ? '✅' : '❌'} **${name}** — ${data.count} vote${data.count !== 1 ? 's' : ''}${isAuthor ? ' *(correct!)*' : ''}`;
+      })
+    );
+    resultsEmbed.addFields({ name: '🗳️ Vote Breakdown', value: voteLines.join('\n') });
+  } else {
+    resultsEmbed.addFields({ name: '🗳️ Votes', value: 'Nobody voted this round!' });
+  }
+
+  const winner = sorted[0];
+  if (winner) {
+    const winnerMember = await guild.members.fetch(winner[0]).catch(() => null);
+    const winnerName = winnerMember ? winnerMember.displayName : winner[0];
+    resultsEmbed.addFields({
+      name: '👑 Most Voted',
+      value: `<@${winner[0]}> (${winnerName}) with **${winner[1].count} vote${winner[1].count !== 1 ? 's' : ''}**\n*They'll be in the running for 🗣️ Quote Icon this week!*`,
+    });
+  }
+
+  try {
+    const origMsg = await channel.messages.fetch(round.discordMessageId);
+    if (origMsg) {
+      const disabledSelect = new StringSelectMenuBuilder()
+        .setCustomId('guesswho:closed')
+        .setPlaceholder('This round is closed')
+        .setDisabled(true)
+        .addOptions([new StringSelectMenuOptionBuilder().setLabel('Closed').setValue('closed')]);
+      const disabledButton = new ButtonBuilder()
+        .setCustomId('guesswho_close:closed')
+        .setLabel('Round Closed')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔒')
+        .setDisabled(true);
+      await origMsg.edit({
+        components: [
+          new ActionRowBuilder().addComponents(disabledSelect),
+          new ActionRowBuilder().addComponents(disabledButton),
+        ],
+      });
+    }
+  } catch { /* message deleted */ }
+
+  await channel.send({ embeds: [resultsEmbed] });
+
+  return { round, winner: winner ? { userId: winner[0], count: winner[1].count } : null };
 }
 
 module.exports = function scheduleGuessWho(client) {
-  cron.schedule(config.GUESS_WHO_CRON, () => postGuessWho(client), {
-    timezone: 'UTC',
-  });
+  cron.schedule(config.GUESS_WHO_CRON, () => postGuessWho(client), { timezone: 'UTC' });
   console.log(`[Cron] Guess-who scheduled: ${config.GUESS_WHO_CRON}`);
 };
 
 module.exports.run = postGuessWho;
+module.exports.closeRound = closeRound;
