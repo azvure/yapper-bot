@@ -7,6 +7,7 @@ const { GuessWhoRound } = require('../models/GuessWho');
 const { closeRound } = require('./guessWho');
 const {
   getLastWeekStart,
+  getWeekStart,
   getTopMember,
   formatDuration,
   rotateWeeklyRoles,
@@ -23,14 +24,15 @@ async function runWeeklyAnnouncement(client, force = false) {
 
   const guessCh = guild.channels.cache.get(config.GUESS_WHO_CHANNEL);
 
+  // Sync voice stats for the week being announced
   await syncVcStats(guildId);
 
-  // Always announce last week's stats (the week that just ended)
-  const lastWeekStart = getLastWeekStart();
+  // When force-triggered, announce current week; otherwise announce last week
+  const announceWeek = force ? getWeekStart() : getLastWeekStart();
 
-  const stats = await WeeklyStats.findOne({ guildId, weekStart: lastWeekStart });
+  const stats = await WeeklyStats.findOne({ guildId, weekStart: announceWeek });
   if (!stats || stats.members.length === 0) {
-    return announceCh.send('No data collected this week.');
+    return announceCh.send('❌ No stats collected for this week yet. Come back when there\'s more activity!');
   }
 
   // Skip if already announced unless forced via /announce
@@ -38,39 +40,40 @@ async function runWeeklyAnnouncement(client, force = false) {
 
   const members = stats.members;
 
+  // Find top members per category
   const mediaKing    = getTopMember(members, 'mediaCount');
   const vcGoblin     = getTopMember(members, 'vcSeconds');
   const chatterbox   = getTopMember(members, 'messageCount');
   const nightOwl     = getTopMember(members, 'lateNightMessages');
   const reactionLord = getTopMember(members, 'reactionsGiven');
 
-  // Close any still-open guess-who rounds before tallying
+  // Close any still-open guess-who rounds and tally votes
   const openRounds = await GuessWhoRound.find({ guildId, closed: false });
   for (const openRound of openRounds) {
     if (guessCh) {
-      await closeRound(openRound._id.toString(), guild, guessCh);
+      await closeRound(openRound._id.toString(), guild, guessCh).catch(console.error);
     } else {
       await GuessWhoRound.findByIdAndUpdate(openRound._id, { closed: true, closedAt: new Date() });
     }
   }
 
-  // Quote Icon = person who received the most votes across all rounds this week
-  const weekRounds = await GuessWhoRound.find({ guildId, week: lastWeekStart, closed: true });
+  // Quote Icon = most-voted person in guess-who for this week
+  const weekRounds = await GuessWhoRound.find({ guildId, week: announceWeek, closed: true });
   const voteTally = {};
   for (const round of weekRounds) {
     for (const vote of round.votes) {
-      if (!voteTally[vote.guessedUserId]) voteTally[vote.guessedUserId] = { count: 0 };
-      voteTally[vote.guessedUserId].count++;
+      if (!voteTally[vote.guessedUserId]) voteTally[vote.guessedUserId] = 0;
+      voteTally[vote.guessedUserId]++;
     }
   }
 
   await guild.members.fetch();
-  const topVoted = Object.entries(voteTally).sort((a, b) => b[1].count - a[1].count)[0];
-  const quoteIcon = topVoted
+  const quoteIconEntry = Object.entries(voteTally).sort((a, b) => b[1] - a[1])[0];
+  const quoteIcon = quoteIconEntry
     ? {
-        userId: topVoted[0],
-        username: guild.members.cache.get(topVoted[0])?.user.username || topVoted[0],
-        value: topVoted[1].count,
+        userId: quoteIconEntry[0],
+        username: guild.members.cache.get(quoteIconEntry[0])?.user.username || 'Unknown',
+        value: quoteIconEntry[1],
       }
     : null;
 
@@ -84,53 +87,74 @@ async function runWeeklyAnnouncement(client, force = false) {
   };
   const awards = await rotateWeeklyRoles(guild, winners);
 
-  const weekEnd = new Date(lastWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1000);
-  const fmt = d => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' });
+  // Build date range
+  const weekEnd = new Date(announceWeek.getTime() + 7 * 24 * 60 * 60 * 1000 - 1000);
+  const fmtDate = (d) =>
+    d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'Australia/Sydney' });
 
+  // Build the announcement embed
   const embed = new EmbedBuilder()
-    .setTitle('Weekly Wrap-Up')
-    .setDescription(`Week of ${fmt(lastWeekStart)} to ${fmt(weekEnd)}. Roles have been updated.`)
+    .setTitle('🏆 Weekly Wrap-Up')
+    .setDescription(
+      `Here's how everyone did for the week of **${fmtDate(announceWeek)} – ${fmtDate(weekEnd)}**. New roles have been handed out. Let's go! 🎉`
+    )
     .setColor(0xf39c12)
     .setTimestamp();
 
+  // Champions section
   const championLines = [
-    mediaKing    && `Media King — <@${mediaKing.userId}> (${mediaKing.value} files)`,
-    vcGoblin     && `VC Goblin — <@${vcGoblin.userId}> (${formatDuration(vcGoblin.value)})`,
-    chatterbox   && `Chatterbox — <@${chatterbox.userId}> (${chatterbox.value} messages)`,
-    nightOwl     && `Night Owl — <@${nightOwl.userId}> (${nightOwl.value} late-night messages)`,
-    reactionLord && `Reaction Lord — <@${reactionLord.userId}> (${reactionLord.value} reactions)`,
-    quoteIcon    && `Quote Icon — <@${quoteIcon.userId}> (${quoteIcon.value} votes)`,
+    mediaKing && `🖼️ **Media King** — <@${mediaKing.userId}> (${mediaKing.value} files)`,
+    vcGoblin && `🎙️ **VC Goblin** — <@${vcGoblin.userId}> (${formatDuration(vcGoblin.value)})`,
+    chatterbox && `💬 **Chatterbox** — <@${chatterbox.userId}> (${chatterbox.value} messages)`,
+    nightOwl && `🌙 **Night Owl** — <@${nightOwl.userId}> (${nightOwl.value} late-night)`,
+    reactionLord && `👍 **Reaction Lord** — <@${reactionLord.userId}> (${reactionLord.value} reactions)`,
+    quoteIcon && `❓ **Quote Icon** — <@${quoteIcon.userId}> (${quoteIcon.value} correct guesses)`,
   ].filter(Boolean);
 
-  embed.addFields({
-    name: 'This Week\'s Winners',
-    value: championLines.join('\n') || 'No winners this week.',
-  });
-
-  const top3 = [...members]
-    .sort((a, b) => (b.messageCount || 0) - (a.messageCount || 0))
-    .slice(0, 3);
-
-  if (top3.length > 0) {
+  if (championLines.length > 0) {
     embed.addFields({
-      name: 'Top Chatters',
-      value: top3.map((m, i) =>
-        `${i + 1}. <@${m.userId}> — ${m.messageCount || 0} messages, ${formatDuration(m.vcSeconds)} VC`
-      ).join('\n'),
+      name: 'This Week\'s Champions',
+      value: championLines.join('\n'),
+    });
+  } else {
+    embed.addFields({
+      name: 'This Week\'s Champions',
+      value: 'No clear winners this week — keep the competition going! 💪',
     });
   }
 
-  embed.setFooter({ text: 'Stats reset every Monday. Roles last one week.' });
+  // Top Chatters section (honorable mentions)
+  const top3Chatters = [...members]
+    .sort((a, b) => (b.messageCount || 0) - (a.messageCount || 0))
+    .slice(0, 3);
+
+  if (top3Chatters.length > 0) {
+    const chatterLines = top3Chatters.map((m, i) => {
+      const medal = ['🥇', '🥈', '🥉'][i];
+      return `${medal} <@${m.userId}> — ${m.messageCount || 0} messages, ${formatDuration(m.vcSeconds)} VC`;
+    });
+    embed.addFields({
+      name: 'Top Chatters',
+      value: chatterLines.join('\n'),
+    });
+  }
+
+  // Footer
+  embed.setFooter({
+    text: `Stats reset every Monday • Roles are temporary • ${members.length} members tracked`,
+  });
 
   await announceCh.send({ embeds: [embed] });
 
+  // Mark announced and save
   stats.announced = true;
   stats.weekEnd = weekEnd;
   await stats.save();
 
-  await WeeklyRoles.create({ guildId, week: lastWeekStart, awards });
+  // Log the weekly roles assignment
+  await WeeklyRoles.create({ guildId, week: announceWeek, awards });
 
-  console.log('[Weekly] Announcement sent for', lastWeekStart.toISOString().split('T')[0]);
+  console.log('[Weekly] Announcement sent for week starting', announceWeek.toISOString().split('T')[0]);
 }
 
 module.exports = function scheduleWeeklyAnnouncement(client) {
