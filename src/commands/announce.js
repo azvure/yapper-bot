@@ -10,7 +10,7 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 }); // MessageFlags.Ephemeral
 
     try {
       await run(client, true);

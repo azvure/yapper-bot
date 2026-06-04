@@ -13,7 +13,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 }); // MessageFlags.Ephemeral
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild.id;
 

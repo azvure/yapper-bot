@@ -21,7 +21,7 @@ module.exports = {
         await command.execute(interaction, client);
       } catch (err) {
         console.error(`[Command Error] ${interaction.commandName}:`, err);
-        const errMsg = { content: 'Something went wrong.', ephemeral: true };
+        const errMsg = { content: 'Something went wrong.', flags: 64 };
         interaction.replied || interaction.deferred
           ? await interaction.followUp(errMsg)
           : await interaction.reply(errMsg);
@@ -32,12 +32,12 @@ module.exports = {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('guesswho:')) {
       const roundId = interaction.customId.split(':')[1];
       if (roundId === 'closed') {
-        return interaction.reply({ content: 'This round is already closed.', ephemeral: true });
+        return interaction.reply({ content: 'This round is already closed.', flags: 64 });
       }
 
       const round = await GuessWhoRound.findById(roundId);
       if (!round || round.closed) {
-        return interaction.reply({ content: 'This round is already closed.', ephemeral: true });
+        return interaction.reply({ content: 'This round is already closed.', flags: 64 });
       }
 
       const guessedUserId = interaction.values[0];
@@ -48,7 +48,7 @@ module.exports = {
         const prevName = prev ? prev.displayName : 'someone';
         return interaction.reply({
           content: `You already voted for ${prevName}. Votes are locked in.`,
-          ephemeral: true,
+          flags: 64,
         });
       }
 
@@ -64,7 +64,7 @@ module.exports = {
 
       await interaction.reply({
         content: `Voted for ${guessedName}. Find out if you were right on Monday.`,
-        ephemeral: true,
+        flags: 64,
       });
 
       const totalVotes = round.votes.length;
@@ -81,15 +81,15 @@ module.exports = {
 
     if (interaction.isButton() && interaction.customId.startsWith('guesswho_close:')) {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
-        return interaction.reply({ content: 'Only admins can close rounds early.', ephemeral: true });
+        return interaction.reply({ content: 'Only admins can close rounds early.', flags: 64 });
       }
 
       const roundId = interaction.customId.split(':')[1];
       if (roundId === 'closed') {
-        return interaction.reply({ content: 'This round is already closed.', ephemeral: true });
+        return interaction.reply({ content: 'This round is already closed.', flags: 64 });
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
 
       const result = await closeRound(roundId, interaction.guild, interaction.channel);
       if (!result) {

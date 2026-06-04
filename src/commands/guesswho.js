@@ -8,7 +8,7 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction, client) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 }); // MessageFlags.Ephemeral
     try {
       await run(client);
       await interaction.editReply('Guess-who round posted.');
@@ -18,3 +18,4 @@ module.exports = {
     }
   },
 };
+s
