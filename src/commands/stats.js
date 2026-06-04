@@ -118,7 +118,7 @@ module.exports = {
     const members = stats.members;
     const top5Msg   = [...members].sort((a, b) => (b.messageCount || 0) - (a.messageCount || 0)).slice(0, 5);
     const top5Media = [...members].sort((a, b) => (b.mediaCount || 0) - (a.mediaCount || 0)).slice(0, 3);
-    const top5VC    = [...members].sort((a, b) => (b.vcSeconds || 0)ss - (a.vcSeconds || 0)).slice(0, 3);
+    const top5VC    = [...members].sort((a, b) => (b.vcSeconds || 0) - (a.vcSeconds || 0)).slice(0, 3);
 
     const fmt = (arr, field, formatter = v => String(v)) =>
       arr.map((m, i) => `${i + 1}. <@${m.userId}> — ${formatter(m[field] || 0)}`).join('\n') || 'No data';
