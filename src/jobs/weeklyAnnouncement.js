@@ -66,7 +66,7 @@ async function runWeeklyAnnouncement(client, force = false) {
       voteTally[vote.guessedUserId]++;
     }
   }
-  
+
   const quoteIconEntry = Object.entries(voteTally).sort((a, b) => b[1] - a[1])[0];
   const quoteIcon = quoteIconEntry
     ? {
@@ -107,7 +107,7 @@ async function runWeeklyAnnouncement(client, force = false) {
     chatterbox && `💬 **Chatterbox** — <@${chatterbox.userId}> (${chatterbox.value} messages)`,
     nightOwl && `🌙 **Night Owl** — <@${nightOwl.userId}> (${nightOwl.value} late-night)`,
     reactionLord && `👍 **Reaction Lord** — <@${reactionLord.userId}> (${reactionLord.value} reactions)`,
-    quoteIcon && `❓ **Quote Icon** — <@${quoteIcon.userId}> (${quoteIcon.value} correct guesses)`,
+    quoteIcon && `❓ **Quote Icon** — <@${quoteIcon.userId}>`,
   ].filter(Boolean);
 
   if (championLines.length > 0) {
