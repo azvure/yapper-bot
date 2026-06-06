@@ -12,6 +12,7 @@ const {
   formatDuration,
   rotateWeeklyRoles,
   syncVcStats,
+  updateLifetimeStats,
 } = require('../utils/statsHelper');
 
 async function runWeeklyAnnouncement(client, force = false) {
@@ -84,7 +85,8 @@ async function runWeeklyAnnouncement(client, force = false) {
     REACTION_LORD: reactionLord,
     QUOTE_ICON: quoteIcon,
   };
-  const awards = await rotateWeeklyRoles(guild, winners);
+const awards = await rotateWeeklyRoles(guild, winners);
+await updateLifetimeStats(guildId, members, awards);
 
   // Build date range
   const weekEnd = new Date(announceWeek.getTime() + 7 * 24 * 60 * 60 * 1000 - 1000);

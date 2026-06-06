@@ -1,6 +1,7 @@
 const WeeklyStats = require('../models/WeeklyStats');
 const VoiceSession = require('../models/VoiceSession');
 const config = require('../../config');
+const LifetimeStats = require('../models/LifetimeStats');
 
 function getWeekStart(date = new Date()) {
   const d = new Date(date);
@@ -158,6 +159,38 @@ async function rotateWeeklyRoles(guild, winners) {
   await Promise.all(addPromises);
   return awards;
 }
+async function updateLifetimeStats(guildId, weeklyMembers, awards) {
+  for (const member of weeklyMembers) {
+    await LifetimeStats.findOneAndUpdate(
+      { guildId, userId: member.userId },
+      {
+        $set: { username: member.username },
+        $inc: {
+          totalMessages: member.messageCount || 0,
+          totalMediaSent: member.mediaCount || 0,
+          totalVcSeconds: member.vcSeconds || 0,
+          totalReactionsGiven: member.reactionsGiven || 0,
+          totalLateNightMessages: member.lateNightMessages || 0,
+        },
+      },
+      { upsert: true }
+    );
+  }
+
+  for (const award of awards) {
+    await LifetimeStats.findOneAndUpdate(
+      { guildId, userId: award.userId },
+      {
+        $inc: {
+          [`rolesWon.${award.roleKey}`]: 1,
+          'rolesWon.total': 1,
+        },
+      },
+      { upsert: true }
+    );
+  }
+}
+
 
 const ROLE_COLORS = {
   MEDIA_KING: 0xff6b9d,
@@ -175,6 +208,7 @@ module.exports = {
   incrementStat,
   syncVcStats,
   getTopMember,
+  updateLifetimeStats,
   formatDuration,
   ensureRole,
   rotateWeeklyRoles,
