@@ -108,9 +108,11 @@ async function rotateWeeklyRoles(guild, winners) {
     return [];
   }
 
+  // Single fetch, shared across everything below
   await guild.members.fetch();
 
-  // Strip all existing weekly award roles from everyone first
+  // Strip roles — but collect all removes and await them together
+  const removePromises = [];
   for (const roleName of Object.values(config.ROLES)) {
     const role = guild.roles.cache.find(r => r.name === roleName);
     if (!role) continue;
@@ -119,11 +121,13 @@ async function rotateWeeklyRoles(guild, winners) {
       continue;
     }
     for (const [, member] of role.members) {
-      await member.roles.remove(role).catch(() => {});
+      removePromises.push(member.roles.remove(role).catch(() => {}));
     }
   }
+  await Promise.all(removePromises);
 
   const awards = [];
+  const addPromises = [];
 
   for (const [roleKey, winner] of Object.entries(winners)) {
     if (!winner) continue;
@@ -139,7 +143,7 @@ async function rotateWeeklyRoles(guild, winners) {
 
     const member = guild.members.cache.get(winner.userId);
     if (member) {
-      await member.roles.add(role).catch(() => {});
+      addPromises.push(member.roles.add(role).catch(() => {}));
       awards.push({
         roleKey,
         roleName,
@@ -151,6 +155,7 @@ async function rotateWeeklyRoles(guild, winners) {
     }
   }
 
+  await Promise.all(addPromises);
   return awards;
 }
 

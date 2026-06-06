@@ -133,19 +133,15 @@ async function closeRound(roundId, guild, channel) {
     .setTimestamp();
 
   if (sorted.length > 0) {
-    const voteLines = await Promise.all(
-      sorted.slice(0, 10).map(async ([userId, data]) => {
-        const member = await guild.members
-          .fetch(userId)
-          .catch(() => null);
+   const voteLines = await Promise.all(
+  sorted.slice(0, 10).map(async ([userId, data]) => {
+    const member = guild.members.cache.get(userId)
+      ?? await guild.members.fetch(userId).catch(() => null);
 
-        const name = member
-          ? member.displayName
-          : userId;
-
-        return `${name} — ${data.count} vote${data.count !== 1 ? 's' : ''}`;
-      })
-    );
+    const name = member ? member.displayName : userId;
+    return `${name} — ${data.count} vote${data.count !== 1 ? 's' : ''}`;
+  })
+);
 
     resultsEmbed.addFields({
       name: 'Vote Breakdown',
@@ -161,9 +157,8 @@ async function closeRound(roundId, guild, channel) {
   const winner = sorted[0];
 
   if (winner) {
-    const winnerMember = await guild.members
-      .fetch(winner[0])
-      .catch(() => null);
+    const winnerMember = guild.members.cache.get(winner[0])
+   ?? await guild.members.fetch(winner[0]).catch(() => null);
 
     const winnerName = winnerMember
       ? winnerMember.displayName

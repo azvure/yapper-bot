@@ -66,8 +66,7 @@ async function runWeeklyAnnouncement(client, force = false) {
       voteTally[vote.guessedUserId]++;
     }
   }
-
-  await guild.members.fetch();
+  
   const quoteIconEntry = Object.entries(voteTally).sort((a, b) => b[1] - a[1])[0];
   const quoteIcon = quoteIconEntry
     ? {
