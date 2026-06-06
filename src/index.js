@@ -39,7 +39,7 @@ const eventsPath = path.join(__dirname, 'events');
 const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
 for (const file of eventFiles) {
   const event = require(path.join(eventsPath, file));
-  const eventName = event.name === 'ready' ? 'clientReady' : event.name;
+  const eventName = event.name; // <-- fixed, removed clientReady swap
   if (event.once) {
     client.once(eventName, (...args) => event.execute(...args, client));
   } else {
