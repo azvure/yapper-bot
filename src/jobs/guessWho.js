@@ -39,13 +39,17 @@ async function postGuessWho(client) {
     return channel.send('Not enough members to run a guess-who poll.');
   }
 
-  const options = [...humanMembers.values()]
+const options = [...humanMembers.values()]
     .slice(0, 25)
-    .map(m => new StringSelectMenuOptionBuilder()
-      .setLabel(m.displayName.slice(0, 100))
-      .setValue(m.id)
-    );
-
+    .map(m => {
+      const dupeCheck = humanMembers.filter(x => x.displayName === m.displayName);
+      const label = dupeCheck.size > 1
+        ? `${m.displayName} (${m.user.username})`.slice(0, 100)
+        : m.displayName.slice(0, 100);
+      return new StringSelectMenuOptionBuilder()
+        .setLabel(label)
+        .setValue(m.id);
+    });
   const select = new StringSelectMenuBuilder()
     .setCustomId('guesswho:PLACEHOLDER')
     .setPlaceholder('Who said this?')
