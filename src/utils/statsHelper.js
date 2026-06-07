@@ -1,7 +1,7 @@
 const WeeklyStats = require('../models/WeeklyStats');
 const VoiceSession = require('../models/VoiceSession');
-const config = require('../../config');
 const LifetimeStats = require('../models/LifetimeStats');
+const config = require('../../config');
 
 function getWeekStart(date = new Date()) {
   const d = new Date(date);
@@ -48,6 +48,8 @@ async function incrementStat(guildId, userId, username, field, amount = 1) {
 
 async function syncVcStats(guildId) {
   const weekStart = getWeekStart();
+
+  // Sum up all completed sessions for this week
   const sessions = await VoiceSession.find({
     guildId,
     week: weekStart,
@@ -61,6 +63,17 @@ async function syncVcStats(guildId) {
     totals[s.userId].secs += s.durationSeconds;
   }
 
+  // Also add live time for currently active sessions
+  const activeSessions = await VoiceSession.find({ guildId, active: true });
+  const now = new Date();
+  for (const s of activeSessions) {
+    const liveSecs = Math.floor((now - s.joinedAt) / 1000);
+    if (!totals[s.userId]) totals[s.userId] = { username: s.username, secs: 0 };
+    totals[s.userId].secs += liveSecs;
+  }
+
+  if (Object.keys(totals).length === 0) return;
+
   const weekDoc = await WeeklyStats.findOne({ guildId, weekStart });
   if (!weekDoc) return;
 
@@ -72,6 +85,7 @@ async function syncVcStats(guildId) {
       weekDoc.members.push({ userId, username: data.username, vcSeconds: data.secs });
     }
   }
+
   await weekDoc.save();
 }
 
@@ -109,10 +123,8 @@ async function rotateWeeklyRoles(guild, winners) {
     return [];
   }
 
-  // Single fetch, shared across everything below
   await guild.members.fetch();
 
-  // Strip roles — but collect all removes and await them together
   const removePromises = [];
   for (const roleName of Object.values(config.ROLES)) {
     const role = guild.roles.cache.find(r => r.name === roleName);
@@ -159,6 +171,7 @@ async function rotateWeeklyRoles(guild, winners) {
   await Promise.all(addPromises);
   return awards;
 }
+
 async function updateLifetimeStats(guildId, weeklyMembers, awards) {
   for (const member of weeklyMembers) {
     await LifetimeStats.findOneAndUpdate(
@@ -191,7 +204,6 @@ async function updateLifetimeStats(guildId, weeklyMembers, awards) {
   }
 }
 
-
 const ROLE_COLORS = {
   MEDIA_KING: 0xff6b9d,
   VC_GOBLIN: 0x4ecdc4,
@@ -208,9 +220,9 @@ module.exports = {
   incrementStat,
   syncVcStats,
   getTopMember,
-  updateLifetimeStats,
   formatDuration,
   ensureRole,
   rotateWeeklyRoles,
+  updateLifetimeStats,
   ROLE_COLORS,
 };
