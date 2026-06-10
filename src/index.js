@@ -136,3 +136,14 @@ mongoose
 
   console.log(`[Import] Done! Saved ${totalSaved}, skipped ${totalSkipped}.`);
 });
+
+
+// Self-ping to prevent Render spin-down
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+if (RENDER_URL) {
+  setInterval(() => {
+    fetch(`${RENDER_URL}/health`)
+      .then(() => console.log('[Ping] Self-ping sent'))
+      .catch(err => console.error('[Ping] Self-ping failed:', err));
+  }, 10 * 60 * 1000); // every 10 minutes
+}
